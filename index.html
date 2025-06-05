@@ -207,7 +207,7 @@
 
   </div>
   <footer class="app-footer">
-      ©キムりん＠松本深志高校
+      ©2025 キムりん＠松本深志高校
   </footer>
   <script>
     // 10進数の整数部と小数部を2進数に変換（小数部は最大23ビットまで）
@@ -345,13 +345,13 @@
             <strong>指数部 (8ビット):</strong><br>
             負の指数も扱えるようにするため，指数に127を加えて正の数にします。（これにより -126～+127 が扱えます）<br>
             その値を2進数に変換し，8ビットで記録します。<br>
-            今回の場合は，正規化指数 <strong>${ieee.normalized.exponent}</strong> に 127 を加えた <strong>${ieee.normalized.exponent} + 127 = ${ieee.exponentValue}</strong> を8ビットの2進数に直した <strong>${ieee.exponent}</strong> を記録します.
+            今回の場合は，指数 <strong>${ieee.normalized.exponent}</strong> に 127 を加えた <strong>${ieee.normalized.exponent} + 127 = ${ieee.exponentValue}</strong> を8ビットの2進数に直した <strong>${ieee.exponent}</strong> を記録します.
           </div>
           <div class="desc mantissa-desc">
             <strong>仮数部 (23ビット):</strong><br>
             整数部は正規化により常に1となるので省略し，小数部分を左詰めで格納します。<br>
             今回の場合は，正規化された仮数 <strong>${ieee.normalized.mantissa}</strong> の小数部分 <strong>${ieee.normalized.mantissa.split('.')[1]}</strong> を取得し、
-            これに必要な0を右側に追加して23ビットに調整した結果、最終的に <strong>${ieee.mantissa}</strong> を記録します.
+            これに必要な0を右側に追加するなどして23ビットに調整した結果、最終的に <strong>${ieee.mantissa}</strong> を記録します.
           </div>
         </div>
       `;
