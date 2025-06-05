@@ -204,60 +204,76 @@
     <div id="result">
       <!-- 結果表示エリア -->
     </div>
-
   </div>
   <footer class="app-footer">
       ©2025 キムりん＠松本深志高校
   </footer>
   <script>
-    // 10進数の整数部と小数部を2進数に変換（小数部は最大23ビットまで）
+    // 10進数の整数部と小数部を2進数に変換（小数部は動的に必要ビット数を計算して取得）
     function decimalToBinary(num) {
       const integerPart = Math.floor(num);
       let fractionPart = num - integerPart;
       const intStr = integerPart.toString(2);
       let fracStr = "";
-      let limit = 26;
-      while(limit > 0) {
+      // 正規化後に最低23ビット必要。整数部が "0" の場合は、小数部から1が現れるまで調整が必要なので余裕をもつ
+      const requiredBits = intStr === "0"
+        ? 23 + 24   // 整数部が 0 のときは、最初の1が現れるまで最大24ビットを想定
+        : 23 + (intStr.length + 1);
+      let limit = requiredBits;
+      while (limit > 0) {
         fractionPart *= 2;
         const bit = Math.floor(fractionPart);
         fracStr += bit;
         fractionPart -= bit;
         limit--;
-        if(fractionPart === 0) break;
+        if (fractionPart === 0) break;
       }
-      if(fracStr === "") { fracStr = "0"; }
+      if (fracStr === "") { fracStr = "0"; }
       return intStr + "." + fracStr;
     }
-    
+
     // 正規化：2進数文字列（例："10.1"）を 1.xxx×2^e の形に
+    // ただし、仮数部表示用は23ビットでぴったりにする
     function normalizeBinary(binaryStr) {
       const [intStr, fracStr] = binaryStr.split('.');
-      if(parseInt(intStr, 2) !== 0) {
+      if (parseInt(intStr, 2) !== 0) {
+        // 整数部に1が含まれる場合
         const exponent = intStr.length - 1;
-        const mantissa = intStr[0] + "." + intStr.slice(1) + fracStr;
-        return { mantissa, exponent };
+        // "1." のあとに続くビット列を生成
+        const allBits = intStr.slice(1) + fracStr; // 「1」の後ろに続く全ビット
+        // 仮数部表示用に23ビットだけ取り出しておく
+        const mantissaBody = (allBits + "0".repeat(23)).substring(0, 23);
+        const displayMantissa = "1." + mantissaBody;
+        return { mantissa: displayMantissa, exponent };
       } else {
+        // 整数部が0の場合は、最初に現れる1まで指数を下げていく
         const firstOneIndex = fracStr.indexOf('1');
-        if(firstOneIndex === -1) {
+        if (firstOneIndex === -1) {
+          // 完全に0のとき
           return { mantissa: "0.0", exponent: 0 };
         }
         const exponent = -(firstOneIndex + 1);
-        const mantissa = "1." + fracStr.slice(firstOneIndex + 1);
-        return { mantissa, exponent };
+        // "1." のあとに続くビット列を生成
+        const allBits = fracStr.slice(firstOneIndex + 1);
+        // 仮数部表示用に23ビットだけ取り出しておく
+        const mantissaBody = (allBits + "0".repeat(23)).substring(0, 23);
+        const displayMantissa = "1." + mantissaBody;
+        return { mantissa: displayMantissa, exponent };
       }
     }
-    
+
     // 入力値をIEEE 754 単精度（32ビット）の各部に分解
     function getIEEE754(num) {
       const signBit = num < 0 ? "1" : "0";
-      if(num === 0) {
+      if (num === 0) {
         return {
           sign: signBit,
           exponent: "00000000",
           mantissa: "00000000000000000000000",
           normalized: { mantissa: "0.0", exponent: 0 },
           binaryStr: "0.0",
-          exponentValue: 0
+          exponentValue: 0,
+          displayMantissa: "0.0"
         };
       }
       const absVal = Math.abs(num);
@@ -266,29 +282,32 @@
       const exponentValue = normalized.exponent + 127;
       let exponentBits = exponentValue.toString(2);
       exponentBits = "0".repeat(8 - exponentBits.length) + exponentBits;
+      // normalized.mantissa は "1."+23ビット の形式になっているため、
+      // その小数部分だけを取り出してマントissaBits を作成
       const fractionPart = normalized.mantissa.split('.')[1] || "";
-      const mantissaBits = (fractionPart + "0".repeat(23)).substring(0,23);
+      const mantissaBits = (fractionPart + "0".repeat(23)).substring(0, 23);
       return {
         sign: signBit,
         exponent: exponentBits,
         mantissa: mantissaBits,
         normalized,
         binaryStr,
-        exponentValue
+        exponentValue,
+        displayMantissa: normalized.mantissa
       };
     }
-    
+
     document.getElementById("convertBtn").addEventListener("click", function() {
       const inputVal = document.getElementById("decimalInput").value;
       const num = parseFloat(inputVal);
-      if(isNaN(num)) {
+      if (isNaN(num)) {
         alert("正しい数値を入力してください。");
         return;
       }
-      
+
       const ieee = getIEEE754(num);
       const signDisplay = num < 0 ? "−" : "+";
-      
+
       // (1) 10進法→2進法変換ブロック（ラベルにマーカーを適用）
       let resultHTML = `
         <div class="conversion">
@@ -303,7 +322,7 @@
           </div>
         </div>
       `;
-      
+
       // (2) 2進法の浮動小数点数（正規化）の表示（1行表示、改行追加）
       resultHTML += `
         <div class="normalized">
@@ -311,20 +330,20 @@
           <br>
           <div class="normalized-value">
             <span class="norm-sign" title="符号部">${signDisplay}</span>
-            <span class="norm-mantissa" title="仮数部">${ieee.normalized.mantissa}</span>
+            <span class="norm-mantissa" title="仮数部">${ieee.displayMantissa}</span>
             <span>× 2<sup><span class="norm-exponent" title="指数部">${ieee.normalized.exponent}</span></sup></span>
           </div>
         </div>
       `;
-      
+
       // (3) IEEE 754 形式の32ビット表示（1桁ずつマス目に）
       const bitString = ieee.sign + ieee.exponent + ieee.mantissa;  // 全32桁
       let bitGridHTML = '<div class="bit-grid">';
-      for(let i = 0; i < bitString.length; i++){
+      for (let i = 0; i < bitString.length; i++) {
         let cellClass = "bit-cell";
-        if(i === 0) {
+        if (i === 0) {
           cellClass += " cell-sign";
-        } else if(i >= 1 && i <= 8) {
+        } else if (i >= 1 && i <= 8) {
           cellClass += " cell-exponent";
         } else {
           cellClass += " cell-mantissa";
@@ -332,7 +351,7 @@
         bitGridHTML += `<div class="${cellClass}">${bitString[i]}</div>`;
       }
       bitGridHTML += '</div>';
-      
+
       // (4) 各部の説明（縦に3列）
       const explanationsHTML = `
         <div class="bit-descriptions">
@@ -345,24 +364,24 @@
             <strong>指数部 (8ビット):</strong><br>
             負の指数も扱えるようにするため，指数に127を加えて正の数にします。（これにより -126～+127 が扱えます）<br>
             その値を2進数に変換し，8ビットで記録します。<br>
-            今回の場合は，指数 <strong>${ieee.normalized.exponent}</strong> に 127 を加えた <strong>${ieee.normalized.exponent} + 127 = ${ieee.exponentValue}</strong> を8ビットの2進数に直した <strong>${ieee.exponent}</strong> を記録します.
+            今回の場合は，正規化指数 <strong>${ieee.normalized.exponent}</strong> に 127 を加えた <strong>${ieee.normalized.exponent} + 127 = ${ieee.exponentValue}</strong> を8ビットの2進数に直した <strong>${ieee.exponent}</strong> を記録します.
           </div>
           <div class="desc mantissa-desc">
             <strong>仮数部 (23ビット):</strong><br>
             整数部は正規化により常に1となるので省略し，小数部分を左詰めで格納します。<br>
-            今回の場合は，正規化された仮数 <strong>${ieee.normalized.mantissa}</strong> の小数部分 <strong>${ieee.normalized.mantissa.split('.')[1]}</strong> を取得し、
-            これに必要な0を右側に追加するなどして23ビットに調整した結果、最終的に <strong>${ieee.mantissa}</strong> を記録します.
+            今回の場合は，正規化された仮数 <strong>${ieee.displayMantissa}</strong> の小数部分 <strong>${ieee.displayMantissa.split('.')[1]}</strong> を取得し、
+            これに必要な0を右側に追加して23ビットに調整した結果、最終的に <strong>${ieee.mantissa}</strong> を記録します.
           </div>
         </div>
       `;
-      
+
       resultHTML += `
         <div class="ieee">
           ${bitGridHTML}
           ${explanationsHTML}
         </div>
       `;
-      
+
       document.getElementById("result").innerHTML = resultHTML;
     });
   </script>
